@@ -1,0 +1,30 @@
+#!/bin/sh
+
+set -e
+
+SVNADMIN=/usr/bin/svnadmin
+BASE_DIR=/srv/svn
+REPO_DIR=${BASE_DIR}/repositories
+BACKUP_DIR=${BASE_DIR}/backups
+
+for REPO_PATH in $REPO_DIR/*; do
+	REPO=$(basename "$REPO_PATH")
+	BACKUP_PATH="${BACKUP_DIR}/${REPO}.dump.gz"
+
+	# Only do work if a commit has happened since backup
+	if [ "${REPO_PATH}/db" -nt "$BACKUP_PATH" ]; then
+		$SVNADMIN dump --quiet "$REPO_PATH" | gzip > "$BACKUP_PATH"
+	fi
+done
+
+# Automatically export variables
+set -a
+
+# Import AWS_ variables
+. /etc/repository-backup.conf
+
+# Stop auto exporting variables
+set +a
+
+# Sync backup directory up to S3
+aws s3 sync "$BACKUP_DIR" s3://$AWS_BUCKET
